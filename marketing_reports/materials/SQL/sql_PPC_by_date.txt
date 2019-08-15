@@ -1,0 +1,32 @@
+SELECT
+	CASE Device
+		WHEN 'Computer' THEN 'Desktop'
+		WHEN 'Mobile' THEN 'Mobile'
+		WHEN 'Tablet' THEN 'Tablet'
+	END AS Device,
+	MatchType,    
+	TrafficDate, 
+	SUM(Impressions) AS Impressions,
+	SUM(Clicks) AS Clicks,
+	SUM(Cost) AS Cost,
+	CONVERT(FLOAT,SUM(Clicks))/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS CTR,
+	SUM(AvgPosition*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgPosition,
+	SUM(Cost)/(0.0000001 + CONVERT(FLOAT,SUM(Clicks))) AS AvgCPC,
+	SUM(QualityScore*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgQualityScore,
+	SUM(MaxCPC*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgMaxCPC,
+	SUM(SearchImpressionShare*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgSearchImpressionShare,
+	SUM(CONVERT(FLOAT,AdRelevanceScore)*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgAdRelevanceScore ,
+	SUM(CONVERT(FLOAT,LandingPageExperienceScore)*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgLandPageExperience,
+	SUM(CONVERT(FLOAT,FirstPageCPC)*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgFirstPageMaxCPC
+From tblA
+WHERE TrafficDate BETWEEN '2009-12-01' AND '2017-12-01'
+AND OTBAccount = 'UK'
+AND CampaignState = 'enabled'
+GROUP BY
+	TrafficDate,
+	CASE Device
+		WHEN 'Computer' THEN 'Desktop'
+		WHEN 'Mobile' THEN 'Mobile'
+		WHEN 'Tablet' THEN 'Tablet'
+	END,	
+	MatchType

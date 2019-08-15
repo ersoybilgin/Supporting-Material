@@ -1,0 +1,1022 @@
+<!-- python -m SimpleHTTPServer 8080 //-->
+<!-- http://bl.ocks.org/mbostock/4062045 //-->
+
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+<title>d3.js force-directed -- Departure Month vs Hotel </title>
+
+<!-- JavaScript Libraries //-->
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<!-- CSS Style //-->
+<link href="http://fonts.googleapis.com/css?family=Source+Sans+Pro:300,900|Source+Code+Pro:300" rel="stylesheet" type="text/css">
+<style>
+body {
+    font-family: 'Source Sans Pro', sans-serif;
+    font-weight: 300;
+}
+
+b {
+    font-weight: 900;
+}
+
+.outline {
+    fill: none;
+    stroke: #888888;
+    stroke-width: 1px;
+}
+
+#tooltip {
+    font-size: 10pt;
+    font-weight: 900;
+
+    fill: #000000;
+    stroke: #ffffff;
+    stroke-width: 0.25px;
+}
+
+.node {
+  cursor: pointer;
+  stroke-width: 1.5px;
+  z-index: 501;
+}
+
+.nodetext {
+    pointer-events: none;
+    font: 16px sans-serif;
+    stroke: #fff;
+    stroke-width: .5px;
+}
+
+
+.node text {
+  pointer-events: none;
+  font: 10px sans-serif;
+  z-index: 901;
+}
+
+.node.origin text {
+  font: 14px sans-serif;
+}
+
+.link {
+    fill: none;
+    stroke: rgb(180, 180, 180);
+    stroke-weight: 1px;
+    //stroke-opacity: 0.1;
+}
+
+.highlight {
+    stroke: red;
+    stroke-weight: 4px;
+    stroke-opacity: 1.0;
+}
+
+#graph-title {
+  font: 20px sans-serif;
+}
+
+
+input[type="file"] {
+      width: 98%;
+      height: 20px;
+    }
+    
+    label[for="file"] {
+      width: 50%;
+      height: 20px;
+    }
+    
+    .area {
+      display: block;
+      border: 5px dotted #ccc;
+      text-align: center;
+    }
+    
+    .area:after {
+      display: block;
+      border: none;
+      white-space: pre;
+      content: "Drop your files or folders here!\aOr click to select files folders";
+      position: relative;
+      left: 0%;
+      top: -75px;
+      text-align: center;
+    }
+    
+    .drag {
+      border: 5px dotted green;
+      background-color: yellow;
+    }
+    
+    #result ul {
+      list-style: none;
+      margin-top: 20px;
+    }
+    
+    #result ul li {
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    
+    #result li span {
+      font-weight: bold;
+      color: navy;
+    }
+	
+</style>
+
+<body>
+
+<p id="graph-title"> Force-directed graph: Departure Month vs Hotel</p>
+
+<div id="svg-holder"></div>
+
+<label id="dropArea" class="area">
+	<input id="file" type="file" name="json_file_name" pattern="graph_mh{1}" accept=".json"/>
+</label>
+
+<output id="result">
+	<ul></ul>
+</output>
+
+<div id="svg-holder"></div>
+
+<script>
+	// NON -SVG
+	// this part is from http://plnkr.co/edit/ff5vmuuIMzSapu6MiUJ3?p=preview
+	var dropArea = document.getElementById("dropArea");
+    var output = document.getElementById("result");
+    var ul = output.querySelector("ul");
+    
+
+    function filesDroped(event) {
+      var webkitResult = [];
+      var mozResult = [];
+      var files;
+      console.log(event);
+      event.stopPropagation();
+      event.preventDefault();
+      dropArea.className = "area";
+
+      // do mozilla stuff
+      function mozReadDirectories(entries, path) {
+        console.log("dir", entries, path);
+        return [].reduce.call(entries, function(promise, entry) {
+            return promise.then(function() {
+              return Promise.resolve(entry.getFilesAndDirectories() || entry)
+                .then(function(dir) {
+                  return dir
+                })
+            })
+          }, Promise.resolve())
+          .then(function(items) {
+            var dir = items.filter(function(folder) {
+              return folder instanceof Directory
+            });
+            var files = items.filter(function(file) {
+              return file instanceof File
+            });
+            if (files.length) {
+              // console.log("files:", files, path);
+              mozResult = mozResult.concat.apply(mozResult, files);
+            }
+            if (dir.length) {
+              // console.log(dir, dir[0] instanceof Directory);
+              return mozReadDirectories(dir, dir[0].path || path);
+
+            } else {
+              if (!dir.length) {
+                return Promise.resolve(mozResult).then(function(complete) {
+                  return complete
+                })
+              }
+            }
+
+          })
+
+      };
+
+      function handleEntries(entry) {
+        let file = "webkitGetAsEntry" in entry ? entry.webkitGetAsEntry() : entry
+        return Promise.resolve(file);
+      }
+
+      function handleFile(entry) {
+        return new Promise(function(resolve) {
+          if (entry.isFile) {			  
+            entry.file(function(file) {				
+              listFile(file, entry.fullPath).then(resolve)
+            })
+          } 
+		  /*
+		  else if (entry.isDirectory) {
+            var reader = entry.createReader();
+            reader.readEntries(webkitReadDirectories.bind(null, entry, handleFile, resolve))
+          } 
+		  else {
+            var entries = [entry];
+            return entries.reduce(function(promise, file) {
+                return promise.then(function() {
+                  return listDirectory(file)
+                })
+              }, Promise.resolve())
+              .then(function() {
+                return Promise.all(entries.map(function(file) {
+                  return listFile(file)
+                })).then(resolve)
+              })
+          }
+		  */
+        })
+
+        function webkitReadDirectories(entry, callback, resolve, entries) {
+          console.log(entries);
+          return listDirectory(entry).then(function(currentDirectory) {
+            console.log(`iterating ${currentDirectory.name} directory`, entry);
+            return entries.reduce(function(promise, directory) {
+              return promise.then(function() {
+                return callback(directory)
+              });
+            }, Promise.resolve())
+          }).then(resolve);
+        }
+
+      }
+
+      function listDirectory(entry) {
+        console.log('entry', entry);
+        var path = (entry.fullPath || entry.webkitRelativePath.slice(0, entry.webkitRelativePath.lastIndexOf("/")));
+        var cname = path.split("/").filter(Boolean).join("-");
+        console.log("cname", cname)
+        if (!document.getElementsByClassName(cname).length) {
+          var directoryInfo = `<li><ul class=${cname}>
+                      <li>
+                      <span>
+                        Directory Name: ${entry.name}<br>
+                        Path: ${path}
+                        <hr>
+                      </span>
+                      </li></ul></li>`;
+          var curr = document.getElementsByTagName("ul");
+          var _ul = curr[curr.length - 1];
+          var _li = _ul.querySelectorAll("li");
+          if (!document.querySelector("[class*=" + cname + "]")) {
+            if (_li.length) {
+              _li[_li.length - 1].innerHTML += `${directoryInfo}`;
+            } else {
+              _ul.innerHTML += `${directoryInfo}`
+            }
+          } else {
+            ul.innerHTML += `${directoryInfo}`
+          }
+        }
+        return Promise.resolve(entry);
+      }
+
+      function listFile(file, path) {
+        path = path || file.webkitRelativePath || "/" + file.name;
+        var filesInfo = `<li>
+                        Name: ${file.name}</br> 
+                        Size: ${file.size} bytes</br> 
+                        Type: ${file.type}</br> 
+                        Modified Date: ${file.lastModifiedDate}<br>
+                        Full Path: ${path}
+                      </li>`;
+
+        var currentPath = path.split("/").filter(Boolean);
+        currentPath.pop();
+        var appended = false;
+        var curr = document.getElementsByClassName(`${currentPath.join("-")}`);
+        if (curr.length) {
+          for (li of curr[curr.length - 1].querySelectorAll("li")) {
+            if (li.innerHTML.indexOf(path.slice(0, path.lastIndexOf("/"))) > -1) {
+              li.querySelector("span").insertAdjacentHTML("afterend", `${filesInfo}`);
+              appended = true;
+              break;
+            }
+
+          }
+          if (!appended) {
+            curr[curr.length - 1].innerHTML += `${filesInfo}`;
+          }
+        }
+        console.log(`reading ${file.name}, size: ${file.size}, path:${path}`);
+        webkitResult.push(file);
+        return Promise.resolve(webkitResult)
+      };
+
+      function processFiles(files) {
+        Promise.all([].map.call(files, function(file, index) {
+            return handleEntries(file, index).then(runGraph)
+          }))
+          .then(function() {
+            console.log("complete", webkitResult)
+          })
+          .catch(function(err) {
+            alert(err.message);
+          })
+      }
+
+      if ("getFilesAndDirectories" in event.target) {
+        return (event.type === "drop" ? event.dataTransfer : event.target).getFilesAndDirectories()
+          .then(function(dir) {
+            if (dir[0] instanceof Directory) {
+              console.log(dir)
+              return mozReadDirectories(dir, dir[0].path || path)
+                .then(function(complete) {
+                  console.log("complete:", complete);
+                  event.target.value = null;
+                });
+            } else {
+              if (dir[0] instanceof File && dir[0].size > 0) {
+              return Promise.resolve(dir)
+                    .then(function(complete) {
+                      console.log("complete:", complete);
+                    })
+              } else {
+                if (dir[0].size == 0) {
+                  throw new Error("could not process '" + dir[0].name + "' directory"
+                                  + " at drop event at firefox, upload folders at 'Choose folder...' input");
+                }
+              }
+            }
+          }).catch(function(err) {
+            alert(err)
+          })
+      }
+ 
+      // do webkit stuff
+      if (event.type === "drop" && event.target.webkitdirectory) {
+        files = event.dataTransfer.items || event.dataTransfer.files;
+      } else if (event.type === "change") {
+        files = event.target.files;
+      }
+
+      if (files) {
+        processFiles(files)
+      }
+
+    }
+    //dropArea.addEventListener("dragover", dragHandler);
+    dropArea.addEventListener("change", filesDroped);
+    dropArea.addEventListener("drop", filesDroped);
+</script>
+
+</body>
+
+<script>
+// SVG
+var width  = 1400;
+var height = 700;
+var margin = 20;
+var pad = margin / 2;
+var color = ["#ef8a62", "#67a9cf", "#bababa", "#8073ac"] //d3.scale.category20();
+var type_color_idx = {'month':0, 'hotel':1}
+var GRAPH = [],
+	month_nodes = {};
+
+
+// Generates a tooltip for a SVG circle element based on its ID
+function addTooltip(circle) {
+    var x = parseFloat(circle.attr("cx"));
+    var y = parseFloat(circle.attr("cy"));
+    var r = parseFloat(circle.attr("r"));
+    var text = circle.attr("name") + '_' + circle.attr("group");
+    var tooltip = d3.select("#plot")
+        .append("text")
+        .text(text)
+        .attr("x", x)
+        .attr("y", y)
+        .attr("dy", -r * 2)
+        .attr("id", "tooltip");
+    var offset = tooltip.node().getBBox().width / 2;
+    if ((x - offset) < 0) {
+        tooltip.attr("text-anchor", "start");
+        tooltip.attr("dx", -r);
+    }
+    else if ((x + offset) > (width - margin)) {
+        tooltip.attr("text-anchor", "end");
+        tooltip.attr("dx", r);
+    }
+    else {
+        tooltip.attr("text-anchor", "middle");
+        tooltip.attr("dx", 0);
+    }
+}
+
+
+var vis = d3.select("#chart")
+  .append("svg:svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("pointer-events", "all")
+  .append('svg:g')
+    .call(d3.behavior.zoom().on("zoom", redraw))
+  .append('svg:g');
+//vis.append('svg:rect')
+//    .attr('width', width)
+//    .attr('height', height)
+//    .attr('fill', 'white');
+	
+	
+function redraw() {
+  console.log("here", d3.event.translate, d3.event.scale);
+  vis.attr("transform",
+      "translate(" + d3.event.translate + ")"
+      + " scale(" + d3.event.scale + ")");
+}
+
+
+function drawGraph(graph) {
+
+	GRAPH = graph
+	
+	graph.nodes.forEach(function(o, e) {
+		if(o.type == 'month'){
+			month_nodes[o.index.toString()] = 0.0;
+		}
+	});
+
+	//console.log(graph.links)
+    var svg = d3.select("#force").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+    // draw plot background
+    svg.append("rect")
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "#eeeeee");
+    // create an area within svg for plotting graph
+    var plot = svg.append("g")
+        .attr("id", "plot")
+        .attr("transform", "translate(" + pad + ", " + pad + ")");
+		
+	var gravity, friction;
+	if(graph.nodes.length > 330) {
+		gravity = .16; friction = 0.17;
+	} else if(graph.nodes.length > 160){
+		gravity = .08; friction = 0.22;
+	} else if(graph.nodes.length > 80){
+		gravity = .04; friction = 0.3;
+	} else {
+		gravity = .1; friction = 0.4;
+	}
+	console.log('graph.nodes.length', graph.nodes.length)
+	console.log('gravity', gravity)
+    // https://github.com/mbostock/d3/wiki/Force-Layout#wiki-force
+	
+	var scale_lin_l = d3.scale.linear()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 5]);
+		
+	var scale_pow_l = d3.scale.pow()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 5]);
+		 
+	var scale_log_l = d3.scale.log()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 5]);
+		
+    var layout = d3.layout.force()
+        .size([width - margin, height - margin])
+        .charge(-400)
+		.friction([friction])
+		.chargeDistance([900])
+		.gravity([gravity])
+        .linkDistance(function(d, i) {
+            //return 100 / (1 + 1*Math.log(d.orders)) ;
+			//return 10 / (0.00001 + (d.value)) ;
+			return 100 / scale_lin_l(d.value);
+        })
+        .nodes(graph.nodes)
+        .links(graph.links)
+        .start();
+		
+	/*layout.on("tick", function(e) {
+	  var q = d3.geom.quadtree(graph.nodes),
+		  i = 0,
+		  n = graph.nodes.length;
+
+	  while (++i < n) q.visit(collide(graph.nodes[i]));
+
+	  d3.selectAll("circle")
+		  .attr("cx", function(d) { return d.x; })
+		  .attr("cy", function(d) { return d.y; });
+	});
+	*/
+		
+    drawLinks(graph.links);
+    drawNodes(graph.nodes);
+	
+    // add ability to drag and update layout
+    // https://github.com/mbostock/d3/wiki/Force-Layout#wiki-drag
+    d3.selectAll(".node").call(layout.drag);
+    // https://github.com/mbostock/d3/wiki/Force-Layout#wiki-on
+    layout.on("tick", function() {
+        d3.selectAll(".link")
+            .attr("x1", function(d) { return d.source.x; })
+            .attr("y1", function(d) { return d.source.y; })
+            .attr("x2", function(d) { return d.target.x; })
+            .attr("y2", function(d) { return d.target.y; });
+        d3.selectAll(".node")
+            .attr("cx", function(d) { return d.x; })
+            .attr("cy", function(d) { return d.y; });
+    });
+}
+    
+	
+function tick(e) {
+  // Push different nodes in different directions for clustering.
+  var k = 6 * e.alpha;
+  graph.nodes.forEach(function(o, i) {
+    o.y += i & 1 ? k : -k;
+    o.x += i & 2 ? k : -k;
+  });
+  node.attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+}
+
+
+// Draws nodes on plot
+function drawNodes(nodes) {
+	var scale_lin_h = d3.scale.linear()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'hotel') {return d.orders};
+        }))
+        .range([4, 16]);
+		
+	var scale_pow_h = d3.scale.pow()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'hotel') {return d.orders};
+        }))
+        .range([4, 16]);
+		
+	var scale_log_h = d3.scale.log()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'hotel') {return d.orders + 1};
+        }))
+        .range([4, 16]);
+		
+	var scale_lin_a = d3.scale.linear()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'month') {return d.orders};
+        }))
+        .range([5, 20]);
+		
+	var scale_pow_a = d3.scale.pow()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'month') {return d.orders};
+        }))
+        .range([5, 20]);
+		
+	var scale_log_a = d3.scale.log()
+        .domain(d3.extent(nodes, function(d, i) {
+           if (d.type == 'month') {return d.orders + 1};
+        }))
+        .range([5, 20]);
+	
+	    
+    // https://github.com/mbostock/d3/wiki/Force-Layout#wiki-nodes
+    d3.select("#plot").selectAll(".node")
+        .data(nodes)
+        .enter()
+        .append("circle")
+        .attr("class", "node")
+        .attr("id", function(d, i) { return d.id; })
+		.attr("name", function(d, i) { return d.name; })
+		.attr("group", function(d, i) { return d.group; })
+		.attr("type", function(d, i) { return d.type; })
+        .attr("cx", function(d, i) { return d.x; })
+        .attr("cy", function(d, i) { return d.y; })
+        .attr("r",  function(d, i) { if (d.type == 'hotel') {return scale_lin_h(d.orders)} else {return scale_lin_a(d.orders)}; })
+		.style("fill", "#ffffff")		
+		.style("fill-opacity", function(d, i) { if(d.type=='hotel'){return 0.9}else{return 1.0} })
+		.style("stroke",   function(d, i) { return color[type_color_idx[d.type]]; })
+		.style("stroke-weight", function(d, i) { if(d.type=='hotel'){return 1}else{return 0} })
+		//.append("text")
+        //.text(function(d, i) { if(d.type=='month'){return d.name} })
+        .on("mouseover", function(d, i) {fade(d3.select(this), d.id, d.index, .02); })        
+		.on("mouseout", normalizeNodes());
+}
+// Draws edges between nodes
+function drawLinks(links) {
+    // width
+    var scale_lin_w = d3.scale.linear()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 4]);
+		
+	var scale_pow_w = d3.scale.pow()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 4]);
+		
+	var scale_log_w = d3.scale.log()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range([1, 4]);
+		
+	// color
+	var scale_pow_c = d3.scale.pow()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range(['LightGray', 'SlateGray']);
+		
+	var scale_lin_c = d3.scale.linear()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range(['LightGray', 'SlateGray']);
+		
+	var scale_log_c = d3.scale.log()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value + 0.00001;
+        }))
+        .range(['LightGray', 'SlateGray']);
+		
+	// transparency	
+	var scale_pow_t = d3.scale.pow()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range([0.05, .2]);
+		
+	var scale_lin_t = d3.scale.linear()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value;
+        }))
+        .range([0.05, .2]);
+		
+	var scale_log_t = d3.scale.log()
+        .domain(d3.extent(links, function(d, i) {
+           return d.value + 0.00001;
+        }))
+        .range([0.05, .2]);
+		
+		
+    // https://github.com/mbostock/d3/wiki/Force-Layout#wiki-links
+    d3.select("#plot").selectAll(".link")
+        .data(links)
+        .enter()
+        .append("line")
+		//.append("path")
+        .attr("class", "link").style("fill", "#ffffff").style("fill-opacity", 0)
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; })
+		//.attr("d", function(d) {
+		//	var dx = d.target.x - d.source.x,
+		//		dy = d.target.y - d.source.y,
+		//		dr = Math.sqrt(dx * dx + dy * dy);
+		//	return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0,1 " + d.target.x + "," + d.target.y;			
+		//})
+		.style("stroke", function(d, i) { return scale_lin_c(d.value); })
+        .style("stroke-width", function(d, i) {
+            return scale_log_w(d.value) + "px";
+        })
+		.style("stroke-opacity", function(d, i) {
+            return scale_log_t(d.value);
+        })
+        .style("stroke-dasharray", function(d, i) {
+            return (Math.log(d.value) <= 2.0) ? "none" : "5, 0";
+        });
+		
+	//node = d3.selectAll(".node")
+	//node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+}
+
+
+function fade(circle, element_id, element_idx, opacity_faded) {	
+		
+	var sub_graph_indices = selectSubGraph(element_id),
+			idx_visible_nodes = sub_graph_indices[0],
+			idx_visible_links = sub_graph_indices[1],
+			arr_linked_sources = sub_graph_indices[2];
+			
+	arr_linked_sources[element_idx.toString()] = 0;
+	
+	var values_linked_sources = [],
+		idx_linked_sources = [],
+		sum_values_linked_sources = 0;
+		
+	for(var key in arr_linked_sources) {
+		idx_linked_sources.push(key);
+		values_linked_sources.push(arr_linked_sources[key]);
+		sum_values_linked_sources += arr_linked_sources[key];
+	}
+	
+	var max_values_linked_sources = values_linked_sources.reduce(function(a, b) {
+		return Math.max(a, b);
+	})
+	
+	var min_values_linked_sources = values_linked_sources.reduce(function(a, b) {
+		return Math.min(a, b);
+	})
+	
+	//console.log('arr_linked_sources', arr_linked_sources)
+	//console.log('idx_linked_sources', idx_linked_sources)
+	//console.log('values_linked_sources', values_linked_sources)
+	//console.log([min_values_linked_sources, max_values_linked_sources])
+	//console.log(sum_values_linked_sources)
+	
+	// transparency	
+	var scale_pow_t = d3.scale.pow()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value;
+        }))
+        .range([0.6, .96]);
+		
+	var scale_lin_t = d3.scale.linear()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value;
+        }))
+        .range([0.6, .96]);
+		
+	var scale_log_t = d3.scale.log()
+        .domain(d3.extent(GRAPH.links, function(d, i) {
+           return d.value + 0.00001;
+        }))
+        .range([0.6, .96]);
+		
+	// fill	
+	var scale_lin_f = d3.scale.linear()
+        .domain([min_values_linked_sources, max_values_linked_sources])
+        .range(['white', '#ef8a62']);
+		
+	var scale_log_f = d3.scale.log()
+        .domain([min_values_linked_sources, max_values_linked_sources])
+        .range(['white', '#ef8a62']);
+			
+	var node_type = GRAPH.nodes[element_idx].type; 
+	
+	d3.selectAll(".node")				
+		.style("fill", function(o) {				
+			var is_node_source = false,
+				idx_str = o.index.toString();				
+			if(sum_values_linked_sources > 0){
+				if(idx_linked_sources.includes(idx_str)){
+					is_node_source = true;
+				}
+			}			
+			return is_node_source ? scale_lin_f(arr_linked_sources[idx_str]) : '#ffffff';
+		})
+		.style("fill-opacity", function(o) {
+			var is_node_visible = false;			
+			if(idx_visible_nodes.includes(o.index)){
+				is_node_visible = true;
+			}
+			return is_node_visible ? .8 : opacity_faded*8;
+		})
+		.style("stroke-opacity", function(o) {
+			var is_node_visible = false;
+			if(idx_visible_nodes.includes(o.index)){
+				is_node_visible = true;
+			}			
+			return is_node_visible ? .8 : opacity_faded*8;
+		});
+		
+	d3.selectAll(".link")
+		.style("stroke-opacity", function(o) {
+			
+			var is_link_visible = false;			
+			if(idx_visible_links.includes(o.index)){				
+				is_link_visible = true;
+			}	
+			
+			if(node_type == 'hotel'){			
+				var opacity_highlighted = scale_lin_t(o.value)
+			} else {
+				var opacity_highlighted = scale_lin_t(o.value) / 3
+			}
+            return is_link_visible ? opacity_highlighted : opacity_faded;
+        });	
+		
+	addTooltip(circle)
+	
+}
+
+
+function normalizeNodes() {
+    return function(d, i) {
+		// width
+		var scale_lin_w = d3.scale.linear()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range([1, 4]);
+			
+		var scale_pow_w = d3.scale.pow()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range([1, 4]);
+			
+		var scale_log_w = d3.scale.log()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range([1, 4]);
+			
+		// color
+		var scale_pow_c = d3.scale.pow()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range(['LightGray', 'SlateGray']);
+			
+		var scale_lin_c = d3.scale.linear()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range(['LightGray', 'SlateGray']);
+			
+		var scale_log_c = d3.scale.log()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value + 0.00001;
+			}))
+			.range(['LightGray', 'SlateGray']);
+			
+		// transparency	
+		var scale_pow_t = d3.scale.pow()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range([0.05, .2]);
+			
+		var scale_lin_t = d3.scale.linear()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value;
+			}))
+			.range([0.05, .2]);
+			
+		var scale_log_t = d3.scale.log()
+			.domain(d3.extent(GRAPH.links, function(d, i) {
+			   return d.value + 0.00001;
+			}))
+			.range([0.05, .2]);
+		
+		d3.selectAll(".link")
+		.style("fill", "#ffffff").style("fill-opacity", 0)
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; })
+		.style("stroke", function(d, i) { return scale_lin_c(d.value); })
+        .style("stroke-width", function(d, i) {
+            return scale_log_w(d.value) + "px";
+        })
+		.style("stroke-opacity", function(d, i) {
+            return scale_log_t(d.value);
+        })
+        .style("stroke-dasharray", function(d, i) {
+            return (Math.log(d.value) <= 2.0) ? "none" : "5, 0";
+        });
+		
+        d3.selectAll(".node")
+		.style("stroke-opacity", 1)
+		.style("fill-opacity", 1)
+		.style("fill", "#ffffff")		
+		.style("fill-opacity", function(d, i) { if(d.type=='hotel'){return 0.9}else{return 1.0} })
+		.style("stroke",   function(d, i) { return color[type_color_idx[d.type]]; })
+		.style("stroke-weight", function(d, i) { if(d.type=='hotel'){return 1}else{return 0} });
+		
+		
+		d3.select("#tooltip").remove()
+    }
+}
+
+Array.prototype.pushUnique = function (item){
+    if(this.indexOf(item) == -1) {
+    //if(jQuery.inArray(item, this) == -1) {
+        this.push(item);
+        return true;
+    }
+    return false;
+}
+
+
+function selectSubGraph(element_id) {
+	
+	var idx_element = searchNodeInGraphJsonById(GRAPH.nodes, element_id)[0].index;
+	var type_element = searchNodeInGraphJsonById(GRAPH.nodes, element_id)[0].type;
+		
+	var visible_nodes = [],
+		visible_links = []
+		linked_sources = month_nodes;
+		sum_linked_sources = 0;
+		
+		
+	var linksTarget = searchLinksInGraphJsonByTargetIdx(GRAPH.links, idx_element)
+	var linksSource = searchLinksInGraphJsonBySourceIdx(GRAPH.links, idx_element)	
+	
+	if (linksTarget.length > 0) {
+		linksTarget.forEach(function(o, e) {
+			visible_nodes.push(o.source.index)
+			visible_links.push(o.index)
+		});	
+	} 
+	
+	if (linksSource.length > 0) {
+		linksSource.forEach(function(o, e) {
+			visible_nodes.push(o.target.index)
+			visible_links.push(o.index)
+		});
+		
+		visible_nodes.forEach(function(o, e) {
+			var localTargetLinks = searchLinksInGraphJsonByTargetIdx(GRAPH.links, o)			
+			
+			localTargetLinks.forEach(function(o_2, e_2) {
+				visible_nodes.pushUnique(o_2.source.index)
+				visible_links.pushUnique(o_2.index)
+			});	
+			localTargetLinks.forEach(function(o_2, e_2) {				
+				linked_sources[o_2.source.index] += GRAPH.links[o].value
+				sum_linked_sources += GRAPH.links[o].value
+			});
+		});
+	} 
+	
+	visible_nodes.push(idx_element)
+	
+	return [visible_nodes, visible_links, linked_sources]
+}
+
+
+
+function searchNodeInGraphJsonById(obj_to_search, id_to_find){
+	var match =[];
+	for(var key in obj_to_search) {
+		if(obj_to_search[key].id == id_to_find) {
+			match[0] = obj_to_search[key];
+			break;
+		}
+	}
+	
+	return match;
+}
+
+function searchLinksInGraphJsonByTargetIdx(obj_to_search, idx_to_find){
+	var match =[];
+	
+	obj_to_search.forEach(function(o, e) {
+		if(o.target.index == idx_to_find){
+			match.push(o);
+		}		
+	});
+	
+	return match;
+}
+
+function searchLinksInGraphJsonBySourceIdx(obj_to_search, idx_to_find){
+	var match =[];
+	obj_to_search.forEach(function(o, e) {
+		if(o.source.index == idx_to_find){
+			match.push(o);
+		}		
+	});
+	
+	return match;
+}
+
+function isEmpty(val){
+	if(val === undefined){
+		return true;
+	} else if(val === null) {
+		return true;
+	} else if(val.length <= 0) {
+		return true;
+	} else if(val.length == 1 || val.length === undefined) {
+		if(isNaN(val)) {return true;}		
+	} else {
+		return false;
+	}
+}
+
+</script>
+</head>
+
+<body>
+<div align="center" id="force"></div>
+
+<script>
+//d3.json("graph_mh.json", drawGraph);
+function runGraph(entry){
+	console.log('entry -2',entry)
+	d3.json(entry.name, drawGraph)
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+SELECT
+    CASE Device
+    WHEN 'Mobile' THEN 'Mobile'
+    WHEN 'Tablet' THEN 'Tablet'
+    WHEN 'Computer' THEN 'Desktop'
+END AS Device,
+    HourOfDay,
+    TrafficDate,
+    SUM(Impressions) AS Impressions,
+    SUM(Clicks) AS Clicks,
+    SUM(Cost) AS Cost,
+    SUM(AvgPosition*Impressions)/(0.0000001 + CONVERT(FLOAT,SUM(Impressions))) AS AvgPosition,
+    SUM(Cost)/(0.0000001 + CONVERT(FLOAT,SUM(Clicks))) AS AvgCPC
+From tblA
+WHERE TrafficDate IN (dayPlaceHolder, yestPlaceHolder, weekPlaceHolder, monthPlaceHolder, yearPlaceHolder)
+AND OTBAccount in ('UK')
+AND ((Campaign LIKE '%flight%') OR (Campaign LIKE  '%holiday%')  OR (Campaign LIKE  '%hotelnames%') OR (Campaign LIKE  '%hotel%'))
+GROUP BY
+    CASE Device
+    WHEN 'Mobile' THEN 'Mobile'
+    WHEN 'Tablet' THEN 'Tablet'
+    WHEN 'Computer' THEN 'Desktop'
+END,
+    HourOfDay,
+    TrafficDate
+ORDER BY
+       Device ASC,
+       TrafficDate ASC,
+       HourOfDay ASC
