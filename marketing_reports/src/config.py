@@ -34,7 +34,7 @@ dctLog = {
 ####################
 
 addressBook = ', '.join([    
-    'bilgin.sherifov@onthebeach.co.uk',
+    'my.email@onthebeach.co.uk',
     'name_1.surname_1@onthebeach.co.uk',
 	'name_2.surname_2@onthebeach.co.uk',
 	'name_3.surname_3@onthebeach.co.uk',
@@ -51,12 +51,12 @@ credentials = {
         'Bilgin': {
             'username': 'username',
             'password': 'password',
-            'my address': 'bilgin.sherifov@onthebeach.co.uk'
+            'my address': 'my.email@onthebeach.co.uk'
         },
         'Datascience': {
             'username': 'username',
             'password': 'password',
-            'my address': 'Datascience@onthebeach.co.uk'
+            'my address': 'datascience.email@onthebeach.co.uk'
         },
     },
     'Mongo': {
@@ -83,19 +83,19 @@ drSqlVarReplacements = {
 
 permissions = {
     'MI':{
-        'OTB\\bilgin.sherifov': {
+        'name_1.surname_1': {
             'fetch': True,
             'push': True,
             'update': False,
             'design': False
         },
-        'OTB\\chris.g.pickford': {
+        'name_2.surname_2': {
             'fetch': True,
             'push': True,
             'update': False,
             'design': False
         },
-        'OTB\\alice.oberacker': {
+        'name_3.surname_3': {
             'fetch': True,
             'push': True,
             'update': False,
