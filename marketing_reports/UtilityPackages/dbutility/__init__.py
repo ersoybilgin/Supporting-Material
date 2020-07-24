@@ -18,13 +18,13 @@ Constant:           THIS_IS_A_CONSTANT
 __status__  = "development"
 __version__ = 'pkg 1.0.0'
 __date__    = "23 August 2017"
-__author__  = 'Bilgin Sherifov <bilgin.sherifov@onthebeach.co.uk>'
+__author__  = 'Bilgin Sherifov <my.email@onthebeach.co.uk>'
 __copyright__ = "Copyright 2017, On The Beach Ltd"
 __credits__ = ["Bilgin Sherifov"]
 __license__ = "???????"
 __created__ =  "22/08/2017"
 __maintainer__ = "data Science Team"
-__email__ = ["bilgin.sherifov@onthebeach.co.uk"]
+__email__ = ["my.email@onthebeach.co.uk"]
 
 
 
